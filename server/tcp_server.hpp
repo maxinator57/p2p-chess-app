@@ -20,18 +20,19 @@ public:
     TcpServer(TcpServer&& other) noexcept;
     ~TcpServer() noexcept;
 
+    [[nodiscard]] auto GetListeningSockFd() const noexcept;
+
     [[nodiscard]] static auto CreateNew(SockAddrData, std::optional<IpAddrType> = {}) noexcept
       -> std::variant<TcpServer, SystemError, IpAddrParsingError>;
-
-    [[nodiscard]] auto GetListeningSockFd() const noexcept;
 
     [[nodiscard]] auto Listen() const noexcept
       -> std::optional<SystemError>;
 
     struct ClientId {
-        sockaddr_storage IpAddr;
+        sockaddr_storage SockAddr;
         int ConnSockFd;
     };
+    struct AcceptWouldBlock {};
     [[nodiscard]] auto Accept() const noexcept
-      -> std::variant<ClientId, SystemError>;
+      -> std::variant<ClientId, AcceptWouldBlock, SystemError>;
 };

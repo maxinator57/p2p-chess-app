@@ -29,14 +29,13 @@ TcpClient::~TcpClient() noexcept {
     }
 }
 
-
 auto TcpClient::CreateNew(const IpAddrType F) noexcept
   -> std::variant<TcpClient, SystemError> {
     const auto sockFd = socket(static_cast<int>(F), SOCK_STREAM, 0);
     if (sockFd == -1) {
         return SystemError{
             .Value = std::errc{errno},
-            .ContextMessage = "socket() syscall failed (tcp_client.cpp, line 34)",
+            .ContextMessage = "socket() syscall failed (" SOURCE_LOCATION ")",
         };
     } else {
         return TcpClient{sockFd};
@@ -64,7 +63,7 @@ namespace {
         if (bind(client->GetSockFd(), (const sockaddr*) &sockAddr, sizeof(sockAddr)) == -1) {
             return SystemError{
                 .Value = std::errc{errno},
-                .ContextMessage = "bind() syscall failed (tcp_client.cpp, line 63)",
+                .ContextMessage = "bind() syscall failed (" SOURCE_LOCATION ")",
             };
         } else {
             return std::move(*client);
@@ -85,7 +84,7 @@ namespace {
         if (connect(sockFd, (sockaddr*) &serverSockAddr, sizeof(serverSockAddr)) == -1) {
             return SystemError{
                 .Value = std::errc{errno},
-                .ContextMessage = "connect() syscall failed (tcp_client.cpp, line 85)",
+                .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
             };
         } else {
             return TcpClient::ConnectionEstablished{};

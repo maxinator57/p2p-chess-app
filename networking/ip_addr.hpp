@@ -24,16 +24,27 @@ enum class IpAddrParsingError {
     IpAddrEmpty,
 };
 constexpr auto GetErrorMessage(IpAddrParsingError err) -> std::string_view {
-    return ""; 
+    using enum IpAddrParsingError;
+    switch(err) {
+        case UnknownIpAddrType:
+            return "Unknown IP address type";
+        case InvalidFormat:
+            return "Invalid IP address format";
+        case IpAddrEmpty:
+            return "Empty IP address";
+        default:
+            return "Unknown IP address parsing error";
+    }
 }
-
+template <class OStream>
+auto operator<<(OStream& out, IpAddrParsingError err) -> OStream& {
+    out << GetErrorMessage(err);
+    return out;
+}
 
 template <IpAddrType F>
 auto ConstructIpAddr(const char* const ipAddrStr)
-  -> std::variant<
-         ip_addr_storage_t<F>,
-         IpAddrParsingError
-     >;
+  -> std::variant<ip_addr_storage_t<F>, IpAddrParsingError>;
 template <>
 auto ConstructIpAddr<IpAddrType::IPv4>(const char* ipAddrStr)
   -> std::variant<in_addr, IpAddrParsingError>;
