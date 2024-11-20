@@ -14,15 +14,20 @@ class TcpServer {
 private:
     int ListeningSockFd_;
 private:
-    explicit TcpServer(int sockFd) noexcept; 
+    explicit TcpServer(int sockFd) noexcept;
 public:
     TcpServer(const TcpServer& other) = delete;
     TcpServer(TcpServer&& other) noexcept;
     ~TcpServer() noexcept;
 
-    [[nodiscard]] auto GetListeningSockFd() const noexcept;
+    template <class IpAddrType>
+    requires std::same_as<IpAddrType, IP::v4>
+          || std::same_as<IpAddrType, IP::v6>
+    [[nodiscard]] static auto CreateNew(SockAddrData) noexcept
+      -> std::variant<TcpServer, SystemError, IpAddrParsingError>;
 
-    [[nodiscard]] static auto CreateNew(SockAddrData, std::optional<IpAddrType> = {}) noexcept
+    /* IP address type is auto-detected */
+    [[nodiscard]] static auto CreateNew(SockAddrData) noexcept
       -> std::variant<TcpServer, SystemError, IpAddrParsingError>;
 
     [[nodiscard]] auto Listen() const noexcept
@@ -35,4 +40,6 @@ public:
     struct AcceptWouldBlock {};
     [[nodiscard]] auto Accept() const noexcept
       -> std::variant<ClientId, AcceptWouldBlock, SystemError>;
+
+    [[nodiscard]] auto GetListeningSockFd() const noexcept;
 };

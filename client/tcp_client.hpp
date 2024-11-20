@@ -5,8 +5,6 @@
 #include "../networking/sock_addr.hpp"
 #include "../utils/error.hpp"
 
-#include <optional>
-
 
 class TcpClient {
 private:
@@ -18,14 +16,32 @@ public:
     TcpClient(TcpClient&& other) noexcept;
     ~TcpClient() noexcept;
 
-    [[nodiscard]] static auto CreateNew(IpAddrType) noexcept
+    template <class IpAddrType>
+    requires std::same_as<IpAddrType, IP::v4>
+          || std::same_as<IpAddrType, IP::v6>
+    [[nodiscard]] static auto CreateNew() noexcept
       -> std::variant<TcpClient, SystemError>;
-    [[nodiscard]] static auto CreateNew(SockAddrData, std::optional<IpAddrType> = {}) noexcept
+
+    template <class IpAddrType>
+    requires std::same_as<IpAddrType, IP::v4>
+          || std::same_as<IpAddrType, IP::v6>
+    [[nodiscard]] static auto CreateNew(SockAddrData) noexcept
+      -> std::variant<TcpClient, SystemError, IpAddrParsingError>;
+
+    // IP address type is auto-detected
+    [[nodiscard]] static auto CreateNew(SockAddrData) noexcept
       -> std::variant<TcpClient, SystemError, IpAddrParsingError>;
 
     [[nodiscard]] auto GetSockFd() const noexcept -> int;
 
     struct ConnectionEstablished {};
+    template <class IpAddrType>
+    requires std::same_as<IpAddrType, IP::v4>
+          || std::same_as<IpAddrType, IP::v6>
+    [[nodiscard]] auto Connect(SockAddrData) const noexcept
+      -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
+
+    // IP address type is auto-detected
     [[nodiscard]] auto Connect(SockAddrData) const noexcept
       -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
 };

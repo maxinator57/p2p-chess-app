@@ -2,7 +2,7 @@
 
 
 template <>
-auto ConstructIpAddr<IpAddrType::IPv4>(const char* const ipAddrStr)
+auto ConstructIpAddr<IP::v4>(const char* const ipAddrStr)
   -> std::variant<in_addr, IpAddrParsingError> {
     if (ipAddrStr == nullptr) {
         return in_addr{.s_addr = INADDR_ANY};
@@ -15,7 +15,7 @@ auto ConstructIpAddr<IpAddrType::IPv4>(const char* const ipAddrStr)
 }
 
 template <>
-auto ConstructIpAddr<IpAddrType::IPv6>(const char* const ipAddrStr)
+auto ConstructIpAddr<IP::v6>(const char* const ipAddrStr)
   -> std::variant<in6_addr, IpAddrParsingError> {
     if (ipAddrStr == nullptr) {
         return in6addr_any;
@@ -28,17 +28,17 @@ auto ConstructIpAddr<IpAddrType::IPv6>(const char* const ipAddrStr)
 }
 
 auto DetectIpAddrType(const char* ipAddrStr)
-  -> std::variant<IpAddrType, IpAddrParsingError> {
+  -> std::variant<IP::v4, IP::v6, IpAddrParsingError> {
     if (ipAddrStr == nullptr) {
         return IpAddrParsingError::IpAddrEmpty;
     }
-    const auto ipv4AddrOrErr = ConstructIpAddr<IpAddrType::IPv4>(ipAddrStr);
+    const auto ipv4AddrOrErr = ConstructIpAddr<IP::v4>(ipAddrStr);
     if (std::holds_alternative<in_addr>(ipv4AddrOrErr)) {
-        return IpAddrType::IPv4;
+        return IP::v4{};
     }
-    const auto ipv6AddrOrErr = ConstructIpAddr<IpAddrType::IPv6>(ipAddrStr);
+    const auto ipv6AddrOrErr = ConstructIpAddr<IP::v6>(ipAddrStr);
     if (std::holds_alternative<in6_addr>(ipv6AddrOrErr)) {
-        return IpAddrType::IPv6;
+        return IP::v6{};
     }
     return IpAddrParsingError::InvalidFormat;
 }

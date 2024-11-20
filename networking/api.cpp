@@ -5,12 +5,12 @@
 
 namespace NApi {
     CreateNewGameRequest::CreateNewGameRequest() noexcept
-        : Request(RequestType::CreateNewGame)
+        : Request{.Type = RequestType::CreateNewGame}
     {
     }
 
     JoinNewGameRequest::JoinNewGameRequest(GameId&& gameId) noexcept
-        : Request(RequestType::JoinNewGame)
+        : Request{.Type = RequestType::JoinNewGame}
         , Id(std::move(gameId))
     {
     }

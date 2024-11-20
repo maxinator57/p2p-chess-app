@@ -5,18 +5,24 @@
 #include <netinet/in.h>
 
 #include <string_view>
+#include <sys/socket.h>
 #include <variant>
 
 
-enum class IpAddrType {
-    IPv4 = AF_INET,
-    IPv6 = AF_INET6,
+struct IP {
+    struct v4 {};
+    struct v6 {};
 };
 
-template <IpAddrType> struct IpAddrStorage;
-template <> struct IpAddrStorage<IpAddrType::IPv4> { using type = in_addr; };
-template <> struct IpAddrStorage<IpAddrType::IPv6> { using type = in6_addr; };
-template <IpAddrType F> using ip_addr_storage_t = IpAddrStorage<F>::type;
+template <class IpAddrType> constexpr auto AddressFamily();
+template <> constexpr auto AddressFamily<IP::v4>() { return AF_INET; }
+template <> constexpr auto AddressFamily<IP::v6>() { return AF_INET6; }
+
+
+template <class IpAddrType> struct IpAddrStorage;
+template <> struct IpAddrStorage<IP::v4> { using type = in_addr; };
+template <> struct IpAddrStorage<IP::v6> { using type = in6_addr; };
+template <class IpAddrType> using ip_addr_storage_t = typename IpAddrStorage<IpAddrType>::type;
 
 enum class IpAddrParsingError {
     UnknownIpAddrType,
@@ -42,15 +48,15 @@ auto operator<<(OStream& out, IpAddrParsingError err) -> OStream& {
     return out;
 }
 
-template <IpAddrType F>
+template <class IpAddrType>
 auto ConstructIpAddr(const char* const ipAddrStr)
-  -> std::variant<ip_addr_storage_t<F>, IpAddrParsingError>;
+  -> std::variant<ip_addr_storage_t<IpAddrType>, IpAddrParsingError>;
 template <>
-auto ConstructIpAddr<IpAddrType::IPv4>(const char* ipAddrStr)
+auto ConstructIpAddr<IP::v4>(const char* ipAddrStr)
   -> std::variant<in_addr, IpAddrParsingError>;
 template <>
-auto ConstructIpAddr<IpAddrType::IPv6>(const char* ipAddrStr)
+auto ConstructIpAddr<IP::v6>(const char* ipAddrStr)
   -> std::variant<in6_addr, IpAddrParsingError>;
 
 auto DetectIpAddrType(const char* ipAddrStr)
-  -> std::variant<IpAddrType, IpAddrParsingError>;
+  -> std::variant<IP::v4, IP::v6, IpAddrParsingError>;

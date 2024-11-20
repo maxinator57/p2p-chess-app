@@ -2,12 +2,9 @@
 
 #include "../utils/overloaded.hpp"
 
-#include <cstdlib>
-#include <iostream>
-
 
 auto main() -> int {
-    const auto serverOrErr = TcpServer::CreateNew({.Port = 60001}, IpAddrType::IPv4);
+    const auto serverOrErr = TcpServer::CreateNew<IP::v6>({.Port = 60001});
     std::visit(overloaded{
         [](const auto& err) { LogErrorAndExit(err); },
         [](const TcpServer&) {}
