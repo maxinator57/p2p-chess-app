@@ -32,8 +32,6 @@ public:
     [[nodiscard]] static auto CreateNew(SockAddrData) noexcept
       -> std::variant<TcpClient, SystemError, IpAddrParsingError>;
 
-    [[nodiscard]] auto GetSockFd() const noexcept -> int;
-
     struct ConnectionEstablished {};
     template <class IpAddrType>
     requires std::same_as<IpAddrType, IP::v4>
@@ -44,4 +42,6 @@ public:
     // IP address type is auto-detected
     [[nodiscard]] auto Connect(SockAddrData) const noexcept
       -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
+
+    [[nodiscard]] auto GetSockFd() const noexcept -> int;
 };

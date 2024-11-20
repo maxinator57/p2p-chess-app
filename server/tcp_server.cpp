@@ -105,6 +105,6 @@ auto TcpServer::Accept() const noexcept -> std::variant<ClientId, AcceptWouldBlo
     return result;
 }
 
-auto TcpServer::GetListeningSockFd() const noexcept {
+auto TcpServer::GetListeningSockFd() const noexcept -> int {
     return ListeningSockFd_;
 }

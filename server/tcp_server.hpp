@@ -41,5 +41,5 @@ public:
     [[nodiscard]] auto Accept() const noexcept
       -> std::variant<ClientId, AcceptWouldBlock, SystemError>;
 
-    [[nodiscard]] auto GetListeningSockFd() const noexcept;
+    [[nodiscard]] auto GetListeningSockFd() const noexcept -> int;
 };
