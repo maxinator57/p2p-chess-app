@@ -10,9 +10,23 @@
 
 
 struct IP {
-    struct v4 {};
-    struct v6 {};
+    struct v4 {
+        struct loopback {};
+        struct any {};
+    };
+    struct v6 {
+        struct loopback {};
+        struct any {};
+    };
 };
+
+using IpAddr = std::variant<
+    std::string_view,
+    IP::v4::any,
+    IP::v4::loopback,
+    IP::v6::any,
+    IP::v6::loopback
+>;
 
 template <class IpAddrType> constexpr auto AddressFamily();
 template <> constexpr auto AddressFamily<IP::v4>() { return AF_INET; }
@@ -23,6 +37,11 @@ template <class IpAddrType> struct IpAddrStorage;
 template <> struct IpAddrStorage<IP::v4> { using type = in_addr; };
 template <> struct IpAddrStorage<IP::v6> { using type = in6_addr; };
 template <class IpAddrType> using ip_addr_storage_t = typename IpAddrStorage<IpAddrType>::type;
+
+template <class IpAddrStorage> struct IpAddrType;
+template <> struct IpAddrType<in_addr> { using type = IP::v4; };
+template <> struct IpAddrType<in6_addr> { using type = IP::v6; };
+template <class IpAddrStorage> using ip_addr_type_t = typename IpAddrType<IpAddrStorage>::type;
 
 enum class IpAddrParsingError {
     UnknownIpAddrType,
@@ -48,15 +67,5 @@ auto operator<<(OStream& out, IpAddrParsingError err) -> OStream& {
     return out;
 }
 
-template <class IpAddrType>
-auto ConstructIpAddr(const char* const ipAddrStr)
-  -> std::variant<ip_addr_storage_t<IpAddrType>, IpAddrParsingError>;
-template <>
-auto ConstructIpAddr<IP::v4>(const char* ipAddrStr)
-  -> std::variant<in_addr, IpAddrParsingError>;
-template <>
-auto ConstructIpAddr<IP::v6>(const char* ipAddrStr)
-  -> std::variant<in6_addr, IpAddrParsingError>;
-
-auto DetectIpAddrType(const char* ipAddrStr)
-  -> std::variant<IP::v4, IP::v6, IpAddrParsingError>;
+auto ConstructIpAddrStorage(IpAddr)
+  -> std::variant<in_addr, in6_addr, IpAddrParsingError>;

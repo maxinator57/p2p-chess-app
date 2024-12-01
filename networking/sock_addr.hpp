@@ -1,11 +1,19 @@
 #pragma once
 
 
+#include "ip_addr.hpp"
+
 #include <netinet/in.h>
 
 
-struct SockAddrData {
-    const char* IpAddrStr = nullptr;
+struct Endpoint {
+    class MandatoryIpAddr {
+    public:
+        IpAddr Value;
+        MandatoryIpAddr(auto&& value)
+            : Value(std::forward<decltype(value)>(value)) {}
+        operator IpAddr() const { return Value; }
+    } IpAddr;
     // Port in local byte order
     struct MandatoryPort {
         in_port_t Value;
@@ -13,7 +21,6 @@ struct SockAddrData {
         operator in_port_t() const { return Value; }
     } Port;
 };
-
 
 auto ConstructSockAddr(
     const in_addr& ipv4Addr,

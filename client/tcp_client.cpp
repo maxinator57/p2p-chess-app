@@ -30,6 +30,10 @@ TcpClient::~TcpClient() noexcept {
     }
 }
 
+auto TcpClient::GetSockFd() const noexcept -> int {
+    return SockFd_;
+}
+
 template <class IpAddrType>
 requires std::same_as<IpAddrType, IP::v4>
       || std::same_as<IpAddrType, IP::v6>
@@ -46,81 +50,57 @@ auto TcpClient::CreateNew() noexcept -> std::variant<TcpClient, SystemError> {
 template auto TcpClient::CreateNew<IP::v4>() noexcept -> std::variant<TcpClient, SystemError>;
 template auto TcpClient::CreateNew<IP::v6>() noexcept -> std::variant<TcpClient, SystemError>;
 
-template <class IpAddrType>
-requires std::same_as<IpAddrType, IP::v4>
-      || std::same_as<IpAddrType, IP::v6>
-auto TcpClient::CreateNew(const SockAddrData clientAddr) noexcept
-  -> std::variant<TcpClient, SystemError, IpAddrParsingError> {
-    const auto addrOrErr = ConstructIpAddr<IpAddrType>(clientAddr.IpAddrStr);
-    const auto* const addr = std::get_if<ip_addr_storage_t<IpAddrType>>(&addrOrErr);
-    if (!addr) return IpAddrParsingError::InvalidFormat;
-
-    auto clientOrErr = TcpClient::CreateNew<IpAddrType>();
-    auto* client = std::get_if<TcpClient>(&clientOrErr);
-    if (!client) return std::move(std::get<SystemError>(clientOrErr));
-
-    const auto sockAddr = ConstructSockAddr(*addr, clientAddr.Port);
-    if (bind(client->GetSockFd(), (const sockaddr*) &sockAddr, sizeof(sockAddr)) == -1) {
-        return SystemError{
-            .Value = std::errc{errno},
-            .ContextMessage = "bind() syscall failed (" SOURCE_LOCATION ")",
-        };
-    }
-    return std::move(*client);
-}
-template auto TcpClient::CreateNew<IP::v4>(SockAddrData) noexcept
-  -> std::variant<TcpClient, SystemError, IpAddrParsingError>;
-template auto TcpClient::CreateNew<IP::v6>(SockAddrData) noexcept
-  -> std::variant<TcpClient, SystemError, IpAddrParsingError>;
-
-auto TcpClient::CreateNew(const SockAddrData clientAddr) noexcept
+auto TcpClient::CreateNew(const Endpoint clientEndpoint) noexcept
   -> std::variant<TcpClient, SystemError, IpAddrParsingError> {
     using R = std::variant<TcpClient, SystemError, IpAddrParsingError>;
-    auto ipAddrTypeOrErr = DetectIpAddrType(clientAddr.IpAddrStr);
+    auto ipAddrStorageOrErr = ConstructIpAddrStorage(clientEndpoint.IpAddr);
     return std::visit(overloaded{
-        [clientAddr](IP::v4) -> R { return TcpClient::CreateNew<IP::v4>(clientAddr); },
-        [clientAddr](IP::v6) -> R { return TcpClient::CreateNew<IP::v6>(clientAddr); },
         [](IpAddrParsingError& err) -> R { return std::move(err); },
-    }, ipAddrTypeOrErr);
+        [port = clientEndpoint.Port](auto& addr) -> R {
+            auto clientOrErr = TcpClient::CreateNew<
+                ip_addr_type_t<std::remove_reference_t<decltype(addr)>>
+            >();
+            return std::visit(overloaded{
+                [&addr, port](TcpClient& client) -> R {
+                    const auto serverSockAddr = ConstructSockAddr(addr, port);
+                    if (connect(client.GetSockFd(), (sockaddr*) &serverSockAddr, sizeof(serverSockAddr)) == -1) {
+                        return SystemError{
+                            .Value = std::errc{errno},
+                            .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
+                        };
+                    }
+                    return std::move(client);
+                },
+                [](auto& err) -> R { return std::move(err); },
+            }, clientOrErr);
+        },
+    }, ipAddrStorageOrErr); 
 }
 
-template <class IpAddrType>
-requires std::same_as<IpAddrType, IP::v4>
-      || std::same_as<IpAddrType, IP::v6>
-auto TcpClient::Connect(const SockAddrData serverAddr) const noexcept
-  -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError> {
-    const auto ipAddrOrErr = ConstructIpAddr<IpAddrType>(serverAddr.IpAddrStr);
-    if (const auto* err = std::get_if<IpAddrParsingError>(&ipAddrOrErr); err) {
-        return *err;
-    }
-    const auto serverSockAddr = ConstructSockAddr(
-        std::get<ip_addr_storage_t<IpAddrType>>(ipAddrOrErr),
-        serverAddr.Port
-    ); 
-    if (connect(SockFd_, (sockaddr*) &serverSockAddr, sizeof(serverSockAddr)) == -1) {
-        return SystemError{
-            .Value = std::errc{errno},
-            .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
-        };
-    }
-    return TcpClient::ConnectionEstablished{};
-}
-template auto TcpClient::Connect<IP::v4>(const SockAddrData serverAddr) const noexcept
-  -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
-template auto TcpClient::Connect<IP::v6>(const SockAddrData serverAddr) const noexcept
-  -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
-
-auto TcpClient::Connect(const SockAddrData serverAddr) const noexcept
+auto TcpClient::Connect(const Endpoint serverEndpoint) const noexcept
   -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError> {
     using R = std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
-    auto ipAddrTypeOrErr = DetectIpAddrType(serverAddr.IpAddrStr);
+    auto ipAddrStorageOrErr = ConstructIpAddrStorage(serverEndpoint.IpAddr);
     return std::visit(overloaded{
-        [serverAddr, this](IP::v4) -> R { return Connect<IP::v4>(serverAddr); },
-        [serverAddr, this](IP::v6) -> R { return Connect<IP::v6>(serverAddr); },
         [](IpAddrParsingError& err) -> R { return std::move(err); },
-    }, ipAddrTypeOrErr); 
+        [port = serverEndpoint.Port, this](auto& addr) -> R {
+            const auto serverSockAddr = ConstructSockAddr(addr, port);
+            if (connect(GetSockFd(), (sockaddr*) &serverSockAddr, sizeof(serverSockAddr)) == -1) {
+                return SystemError{
+                    .Value = std::errc{errno},
+                    .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
+                };
+            }
+            return TcpClient::ConnectionEstablished{};
+        },
+    }, ipAddrStorageOrErr);
 }
 
-auto TcpClient::GetSockFd() const noexcept -> int {
-    return SockFd_;
+auto TcpClient::Send(NApi::CreateNewGameRequest) const noexcept
+  -> std::variant<NApi::CreateNewGameResponse, SystemError> {
 }
+
+auto TcpClient::Send(NApi::JoinGameRequest) const noexcept
+  -> std::variant<NApi::JoinGameResponse, SystemError> {
+}
+

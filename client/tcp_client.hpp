@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include "../networking/api.hpp"
 #include "../networking/ip_addr.hpp"
 #include "../networking/sock_addr.hpp"
 #include "../utils/error.hpp"
@@ -16,32 +17,25 @@ public:
     TcpClient(TcpClient&& other) noexcept;
     ~TcpClient() noexcept;
 
+    [[nodiscard]] auto GetSockFd() const noexcept -> int;
+
     template <class IpAddrType>
     requires std::same_as<IpAddrType, IP::v4>
           || std::same_as<IpAddrType, IP::v6>
     [[nodiscard]] static auto CreateNew() noexcept
       -> std::variant<TcpClient, SystemError>;
 
-    template <class IpAddrType>
-    requires std::same_as<IpAddrType, IP::v4>
-          || std::same_as<IpAddrType, IP::v6>
-    [[nodiscard]] static auto CreateNew(SockAddrData) noexcept
-      -> std::variant<TcpClient, SystemError, IpAddrParsingError>;
-
     // IP address type is auto-detected
-    [[nodiscard]] static auto CreateNew(SockAddrData) noexcept
+    [[nodiscard]] static auto CreateNew(Endpoint) noexcept
       -> std::variant<TcpClient, SystemError, IpAddrParsingError>;
 
     struct ConnectionEstablished {};
-    template <class IpAddrType>
-    requires std::same_as<IpAddrType, IP::v4>
-          || std::same_as<IpAddrType, IP::v6>
-    [[nodiscard]] auto Connect(SockAddrData) const noexcept
-      -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
-
     // IP address type is auto-detected
-    [[nodiscard]] auto Connect(SockAddrData) const noexcept
+    [[nodiscard]] auto Connect(Endpoint) const noexcept
       -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
 
-    [[nodiscard]] auto GetSockFd() const noexcept -> int;
+    [[nodiscard]] auto Send(NApi::CreateNewGameRequest) const noexcept
+      -> std::variant<NApi::CreateNewGameResponse, SystemError>;
+    [[nodiscard]] auto Send(NApi::JoinGameRequest) const noexcept
+      -> std::variant<NApi::JoinGameResponse, SystemError>;
 };

@@ -1,44 +1,29 @@
 #include "ip_addr.hpp"
 
+#include "../utils/overloaded.hpp"
+#include <netinet/in.h>
+#include <sys/socket.h>
 
-template <>
-auto ConstructIpAddr<IP::v4>(const char* const ipAddrStr)
-  -> std::variant<in_addr, IpAddrParsingError> {
-    if (ipAddrStr == nullptr) {
-        return in_addr{.s_addr = INADDR_ANY};
-    } else {
-        in_addr addr;
-        return inet_aton(ipAddrStr, &addr) != 0
-            ? std::variant<in_addr, IpAddrParsingError>{addr}
-            : IpAddrParsingError::InvalidFormat;
-    }
-}
 
-template <>
-auto ConstructIpAddr<IP::v6>(const char* const ipAddrStr)
-  -> std::variant<in6_addr, IpAddrParsingError> {
-    if (ipAddrStr == nullptr) {
-        return in6addr_any;
-    } else {
-        in6_addr addr;
-        return inet_pton(AF_INET6, ipAddrStr, &addr) != 0
-            ? std::variant<in6_addr, IpAddrParsingError>{addr}
-            : IpAddrParsingError::InvalidFormat;
-    }
-}
-
-auto DetectIpAddrType(const char* ipAddrStr)
-  -> std::variant<IP::v4, IP::v6, IpAddrParsingError> {
-    if (ipAddrStr == nullptr) {
-        return IpAddrParsingError::IpAddrEmpty;
-    }
-    const auto ipv4AddrOrErr = ConstructIpAddr<IP::v4>(ipAddrStr);
-    if (std::holds_alternative<in_addr>(ipv4AddrOrErr)) {
-        return IP::v4{};
-    }
-    const auto ipv6AddrOrErr = ConstructIpAddr<IP::v6>(ipAddrStr);
-    if (std::holds_alternative<in6_addr>(ipv6AddrOrErr)) {
-        return IP::v6{};
-    }
-    return IpAddrParsingError::InvalidFormat;
+auto ConstructIpAddrStorage(IpAddr ipAddr)
+  -> std::variant<in_addr, in6_addr, IpAddrParsingError> {
+    using R = std::variant<in_addr, in6_addr, IpAddrParsingError>;
+    return std::visit(overloaded{
+        [](std::string_view addrStr) -> R {
+            if (addrStr.empty()) return IpAddrParsingError::IpAddrEmpty;
+            else { 
+                if (in_addr addr; inet_aton(addrStr.data(), &addr) == 1) {
+                    return addr;
+                }
+                if (in6_addr addr; inet_pton(AF_INET6, addrStr.data(), &addr) == 1) {
+                    return addr;
+                }
+                return IpAddrParsingError::InvalidFormat;
+            }
+        },
+        [](IP::v4::any) -> R { return in_addr{.s_addr = INADDR_ANY}; },
+        [](IP::v4::loopback) -> R { return in_addr{.s_addr = INADDR_LOOPBACK}; },
+        [](IP::v6::any) -> R { return in6addr_any; },
+        [](IP::v6::loopback) -> R { return in6addr_loopback; },
+    }, ipAddr);
 }
