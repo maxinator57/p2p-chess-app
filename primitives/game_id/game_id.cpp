@@ -13,6 +13,13 @@ auto GameId::CreateRandom() noexcept -> GameId {
     return GameId(rng());
 }
 
+auto GameId::GetValue() const -> ValueType {
+    return Value;
+}
+auto GameId::ToString() const -> std::string {
+    return std::to_string(Value);
+}
+
 auto GameId::FromString(std::string_view str) noexcept
   -> std::variant<GameId, SystemError> {
     ValueType value;
@@ -30,10 +37,10 @@ auto GameId::FromString(std::string_view str) noexcept
 
 auto GameId::ToBytes(std::span<std::byte, kSerializedSize> to) const noexcept
   -> void {
-    ::ToBytes(Value, to);
+    IntToBytes(Value, to);
 }
+
 auto GameId::FromBytes(std::span<const std::byte, kSerializedSize> from) noexcept
   -> GameId {
-    ValueType value; 
-    return GameId{::FromBytes<ValueType>(from)};
+    return GameId{IntFromBytes<ValueType>(from)};
 }

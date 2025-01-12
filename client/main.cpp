@@ -1,62 +1,52 @@
-#include "console_client.hpp"
 #include "state.hpp"
+#include "state_handlers/all.hpp"
 #include "tcp_client.hpp"
-#include "../networking/api.hpp"
+#include "user_client/console_client.hpp"
+
 #include "../utils/overloaded.hpp"
 
 
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-
 auto main() -> int {
-    const auto tcpClientOrErr = TcpClient::CreateNew({
+    const auto tcpClientOrErr = TcpClient::CreateNew(Endpoint{
         .IpAddr = IP::v4::loopback{},
         .Port = 60000
     });
     std::visit(overloaded{ 
         [](const auto& err) {
-            std::cerr << "Creating new tcp client: ";
+            std::cerr << "Failed to create TCP client: ";
             LogErrorAndExit(err);
         },
         [](const TcpClient&) {},
     }, tcpClientOrErr);
     const auto& tcpClient = std::get<TcpClient>(tcpClientOrErr);
-
-    const auto connOrErr = tcpClient.Connect({
+    
+    const auto centralServerEndpoint = Endpoint{
         .IpAddr = IP::v4::loopback{},
         .Port = 60001
-    });
-    std::visit(overloaded{
-        [](const auto& err) {
-            std::cerr << "Connect to central server: ";
-            LogErrorAndExit(err);
-        },
-        [](const TcpClient::ConnectionEstablished) {},
-    }, connOrErr); 
-
+    };  
     auto userClient = ConsoleClient{};
-    auto state = State{NState::ConnectedToCentralServer{}};
-    for (;;) {
-        std::visit(overloaded{
-            [&](NState::ConnectedToCentralServer) {
-                auto userAction = userClient.ActOn(
-                    NState::ConnectedToCentralServer{}
-                );
-                std::visit(overloaded{
-                    [&](NUserAction::CreateNewGame) {
-                        const auto resp = tcpClient.Send(
-                            NApi::CreateNewGameRequest{}
-                        );
-                    },
-                    [&](NUserAction::JoinGame& game) {
-                        const auto resp = tcpClient.Send(
-                            NApi::JoinGameRequest{std::move(game.Id)}
-                        );
-                    },
-                }, userAction);
-            },
-            [&](auto) {}
-        }, state);
-    }
+    auto state = NState::State{NState::NeedToConnectToCentralServer{}};
+    auto updateState = [&state](auto& nextState) mutable {
+        state = std::move(nextState);
+    };
+    for (;;) std::visit(overloaded{
+        [&](NState::NeedToConnectToCentralServer) {
+            auto nextState = HandleState(
+                NState::NeedToConnectToCentralServer{},
+                tcpClient,
+                centralServerEndpoint
+            );
+            std::visit(updateState, nextState);
+        }, 
+        [](std::derived_from<NState::ErrorState> auto& errorState) {
+            LogErrorAndExit(errorState.ErrorDescription);
+        },
+        [&](auto& nonErrorState) {
+            auto nextState = HandleState(nonErrorState, tcpClient, userClient);
+            std::visit(updateState, nextState);
+        },
+        [](NState::NeedToExit) {
+            exit(EXIT_SUCCESS);
+        }
+    }, state);
 }

@@ -22,8 +22,8 @@ auto ConstructIpAddrStorage(IpAddr ipAddr)
             }
         },
         [](IP::v4::any) -> R { return in_addr{.s_addr = INADDR_ANY}; },
-        [](IP::v4::loopback) -> R { return in_addr{.s_addr = INADDR_LOOPBACK}; },
         [](IP::v6::any) -> R { return in6addr_any; },
+        [](IP::v4::loopback) -> R { return in_addr{.s_addr = INADDR_LOOPBACK}; },
         [](IP::v6::loopback) -> R { return in6addr_loopback; },
     }, ipAddr);
 }

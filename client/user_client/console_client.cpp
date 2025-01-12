@@ -1,12 +1,12 @@
 #include "console_client.hpp"
 
-#include "../utils/error.hpp"
+#include "../../utils/error.hpp"
 
 #include <iostream>
 #include <string_view>
 
 
-auto ConsoleClient::ActOn(NState::ConnectedToCentralServer)
+auto ConsoleClient::ActOn(NState::ConnectedToCentralServer) noexcept
   -> std::variant<NUserAction::CreateNewGame, NUserAction::JoinGame> {
     static constexpr auto prompt = std::string_view{
         "Connection to the central server established successfully.\n"
@@ -37,4 +37,18 @@ auto ConsoleClient::ActOn(NState::ConnectedToCentralServer)
         }
         std::cout << prompt;
     }
+}
+
+auto ConsoleClient::ActOn(
+    const NState::CreatedNewGame& game,
+    const uint8_t timeoutInSecondsForPeerToJoin
+) noexcept -> void {
+    std::cout << "Successfully created new game with id "
+              << game.Id
+              << ".\n"
+                 "Tell this game id to the other player and ask them "
+                 "to make a \"join game\" request with this game id.\n"
+                 "Waiting for the other player to join the game for "
+              << timeoutInSecondsForPeerToJoin
+              << " seconds...";
 }

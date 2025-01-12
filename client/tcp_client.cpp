@@ -20,6 +20,11 @@ TcpClient::TcpClient(TcpClient&& other) noexcept
     other.SockFd_ = -1;
 }
 
+TcpClient& TcpClient::operator=(TcpClient&& other) noexcept {
+    std::swap(SockFd_, other.SockFd_);
+    return *this;
+}
+
 TcpClient::~TcpClient() noexcept {
     // Close the underlying file descriptor if
     // this instance of `TcpClient` is not in
@@ -30,15 +35,11 @@ TcpClient::~TcpClient() noexcept {
     }
 }
 
-auto TcpClient::GetSockFd() const noexcept -> int {
-    return SockFd_;
-}
-
 template <class IpAddrType>
 requires std::same_as<IpAddrType, IP::v4>
       || std::same_as<IpAddrType, IP::v6>
 auto TcpClient::CreateNew() noexcept -> std::variant<TcpClient, SystemError> {
-    const auto sockFd = socket(AddressFamily<IpAddrType>(), SOCK_STREAM, 0);
+    const auto sockFd = socket(AddressFamily<IpAddrType>(), SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (sockFd == -1) {
         return SystemError{
             .Value = std::errc{errno},
@@ -63,7 +64,7 @@ auto TcpClient::CreateNew(const Endpoint clientEndpoint) noexcept
             return std::visit(overloaded{
                 [&addr, port](TcpClient& client) -> R {
                     const auto serverSockAddr = ConstructSockAddr(addr, port);
-                    if (connect(client.GetSockFd(), (sockaddr*) &serverSockAddr, sizeof(serverSockAddr)) == -1) {
+                    if (connect(client.SockFd_, (sockaddr*) &serverSockAddr, sizeof(serverSockAddr)) == -1) {
                         return SystemError{
                             .Value = std::errc{errno},
                             .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
@@ -85,7 +86,7 @@ auto TcpClient::Connect(const Endpoint serverEndpoint) const noexcept
         [](IpAddrParsingError& err) -> R { return std::move(err); },
         [port = serverEndpoint.Port, this](auto& addr) -> R {
             const auto serverSockAddr = ConstructSockAddr(addr, port);
-            if (connect(GetSockFd(), (sockaddr*) &serverSockAddr, sizeof(serverSockAddr)) == -1) {
+            if (connect(SockFd_, (sockaddr*) &serverSockAddr, sizeof(serverSockAddr)) == -1) {
                 return SystemError{
                     .Value = std::errc{errno},
                     .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
@@ -96,11 +97,14 @@ auto TcpClient::Connect(const Endpoint serverEndpoint) const noexcept
     }, ipAddrStorageOrErr);
 }
 
-auto TcpClient::Send(NApi::CreateNewGameRequest) const noexcept
-  -> std::variant<NApi::CreateNewGameResponse, SystemError> {
+auto TcpClient::Disconnect() const noexcept -> std::optional<SystemError> {
+    auto dummyAddr = sockaddr{.sa_family = AF_UNSPEC};
+    if (connect(SockFd_, &dummyAddr, sizeof(dummyAddr)) == 0) {
+        return std::nullopt; 
+    } else {
+        return SystemError{
+            .Value = std::errc{errno},
+            .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
+        };
+    }
 }
-
-auto TcpClient::Send(NApi::JoinGameRequest) const noexcept
-  -> std::variant<NApi::JoinGameResponse, SystemError> {
-}
-
