@@ -22,7 +22,7 @@ using SystemError = ErrorWithContext<std::errc>;
 template <class OStream>
 inline auto operator<<(OStream& out, const SystemError& err) -> OStream& {
     if (err.ContextMessage) {
-        out << err.ContextMessage << ", got the following error: ";
+        out << (*err.ContextMessage) << ", got the following error: ";
     }
     const auto errorCode = std::make_error_code(err.Value);
     out << strerrorname_np(errorCode.value())

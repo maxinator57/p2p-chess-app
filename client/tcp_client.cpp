@@ -2,9 +2,23 @@
 
 #include "../networking/sock_addr.hpp"
 #include "../utils/overloaded.hpp"
+#include "../utils/robust_read_write/robust_read_write.hpp"
 
+#include <concepts>
 #include <sys/socket.h>
 #include <unistd.h>
+
+
+namespace NTcpClientActionResult {
+    auto ConnectionTerminatedByPeer::GetErrorMessage() -> std::string {
+        return "TCP connection was terminated by peer";
+    }
+    auto Timeout::GetErrorMessage(std::string_view prefix) const -> std::string {
+        return std::string{prefix}
+            + " timed out (timeout duration: " + std::to_string(Duration.count()) + "ms, "
+            + "actual time elapsed: " + std::to_string(WallTimeElapsed.count()) + "ms)";
+    }
+}
 
 
 TcpClient::TcpClient(int sockFd) noexcept
@@ -79,8 +93,8 @@ auto TcpClient::CreateNew(const Endpoint clientEndpoint) noexcept
 }
 
 auto TcpClient::Connect(const Endpoint serverEndpoint) const noexcept
-  -> std::variant<ConnectionEstablished, SystemError, IpAddrParsingError> {
-    using R = std::variant<ConnectionEstablished, SystemError, IpAddrParsingError>;
+  -> std::variant<Ok, SystemError, IpAddrParsingError> {
+    using R = std::variant<Ok, SystemError, IpAddrParsingError>;
     auto ipAddrStorageOrErr = ConstructIpAddrStorage(serverEndpoint.IpAddr);
     return std::visit(overloaded{
         [](IpAddrParsingError& err) -> R { return std::move(err); },
@@ -92,7 +106,7 @@ auto TcpClient::Connect(const Endpoint serverEndpoint) const noexcept
                     .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
                 };
             }
-            return TcpClient::ConnectionEstablished{};
+            return Ok{};
         },
     }, ipAddrStorageOrErr);
 }
@@ -107,4 +121,58 @@ auto TcpClient::Disconnect() const noexcept -> std::optional<SystemError> {
             .ContextMessage = "connect() syscall failed (" SOURCE_LOCATION ")",
         };
     }
+}
+
+auto TcpClient::Send(
+    std::span<const std::byte> msg,
+    std::chrono::milliseconds timeout
+) const noexcept
+  -> std::variant<Ok, SystemError, Timeout, ConnectionTerminatedByPeer> {
+    using R = std::variant<Ok, SystemError, Timeout, ConnectionTerminatedByPeer>;
+    const auto result = RobustSyncWrite(SockFd_, msg, timeout);
+    // TODO: add proper logging
+    using namespace NRobustSyncWrite;
+    return std::visit(overloaded{
+        [](OnSuccess) -> R {
+            return Ok{};
+        },
+        [](const OnSystemError& onErr) -> R {
+            return onErr.Err;
+        },
+        [](const OnTimeout& onTimeout) -> R {
+            return Timeout{
+                .WallTimeElapsed = onTimeout.Timeout,
+            };
+        },
+        [](const OnPollerrOrPollhup& onPollerrOrPollhup) -> R {
+            return ConnectionTerminatedByPeer{};
+        },
+    }, result);
+}
+
+auto TcpClient::Receive(
+    const std::span<std::byte> msg,
+    const std::chrono::milliseconds timeout
+) const noexcept
+  -> std::variant<Ok, SystemError, Timeout, ConnectionTerminatedByPeer> {
+    using R = std::variant<Ok, SystemError, Timeout, ConnectionTerminatedByPeer>;
+    const auto result = RobustSyncRead(SockFd_, msg, timeout);
+    // TODO: add proper logging
+    using namespace NRobustSyncRead;
+    return std::visit(overloaded{
+        [](OnSuccess) -> R {
+            return Ok{};
+        },
+        [](const OnSystemError& onErr) -> R {
+            return onErr.Err;
+        },
+        [](const OnTimeout& onTimeout) -> R {
+            return Timeout{
+                .WallTimeElapsed = onTimeout.WallTimeElapsed,
+            };
+        },
+        [](const auto& otherResult) -> R {
+            return ConnectionTerminatedByPeer{};
+        },
+    }, result);
 }

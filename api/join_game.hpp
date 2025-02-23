@@ -14,9 +14,9 @@ namespace NApi {
         PlayerId Player;
         GameId Game;
         enum class Result : uint8_t {
-            Success = 40,
-            GameIdDoesNotExist = 41,
-            GameAlreadyHasTwoPlayers = 42,
+            Success = 0,
+            GameIdDoesNotExist = 1,
+            GameAlreadyHasTwoPlayers = 2,
         };
     }; 
 
@@ -28,8 +28,6 @@ namespace NApi {
         auto ToBytes(std::span<std::byte, kSerializedSize>) const noexcept -> void;
         static auto FromBytes(std::span<const std::byte, kSerializedSize>) noexcept
           -> Self;
-        // TODO: get rid of this dummy struct
-        struct ParsingError {};
     };
     using JoinGameRequest = Message<MessageType::JoinGameRequest>;
 
@@ -44,7 +42,7 @@ namespace NApi {
         };
         static auto FromBytes(std::span<const std::byte, kSerializedSize>) noexcept
           -> std::variant<Self, UnknownResultError>;
-        using ParsingError = UnknownResultError;
+        using DeserializationError = UnknownResultError;
     };
     using JoinGameResponse = Message<MessageType::JoinGameResponse>;
 } // namespace NApi

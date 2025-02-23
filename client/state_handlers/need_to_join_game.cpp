@@ -16,10 +16,28 @@ auto NState::HandleState(
     const TcpClient& tcpClient,
     const IUserClient&
 ) noexcept -> PossibleNextState {
-    if (auto err = tcpClient.Send(NApi::JoinGameRequest{game.Id})) {
-        LogErrorAndExit(*err);
+    using namespace NApi;
+    const auto sndBuf = NApi::Serialize(NApi::JoinGameRequest{game.Id});
+    const auto sndResult = tcpClient.Send(sndBuf, std::chrono::seconds{10});
+    if (!std::get_if<TcpClient::Ok>(&sndResult)) {
+        return FailedToJoinGame{{
+            .ErrorDescription = std::visit(overloaded{
+                [](const SystemError& err) {
+                    return ToStringGeneric(err);
+                },
+                [](const TcpClient::Timeout& timeout) {
+                    return timeout.GetErrorMessage("sending a \"join game request\" message to central server");
+                },
+                [](const TcpClient::ConnectionTerminatedByPeer& terminated) {
+                    return terminated.GetErrorMessage();
+                },
+                // Redundant, but is needed for the code to compile
+                [](TcpClient::Ok) { return std::string{}; },
+            }, sndResult),
+        }};
     }
-    auto respOrErr = tcpClient.Receive<NApi::MessageType::JoinGameResponse>();
+    Buf<MessageType::JoinGameResponse> rcvBuf;
+    const auto rcvResult = tcpClient.Receive(rcvBuf, std::chrono::seconds{10});
     return std::visit(overloaded{
         [&game](const NApi::JoinGameResponse& resp) -> PossibleNextState {
             using enum NApi::AddPlayerToGameOp::Result;
@@ -53,5 +71,5 @@ auto NState::HandleState(
                 .RecommendationHowToFix = std::nullopt,
             }};
         }
-    }, respOrErr);
+    }, rcvResult);
 }

@@ -4,10 +4,13 @@
 
 
 class Timer {
+public:
+    using Clock = std::chrono::steady_clock;
 private:
-    decltype(std::chrono::steady_clock::now()) StartTime;
+    decltype(Clock::now()) StartTime;
     std::chrono::milliseconds Timeout;
 public:
-    explicit Timer(std::chrono::milliseconds timeout) noexcept; 
+    explicit Timer(std::chrono::milliseconds timeout) noexcept;
+    auto CalcElapsedTime() const -> std::chrono::milliseconds;
     auto CalcRemainingTime() const -> std::chrono::milliseconds;
 };

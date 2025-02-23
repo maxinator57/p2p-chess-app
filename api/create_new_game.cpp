@@ -2,13 +2,14 @@
 
 #include "../utils/integer_serialization.hpp"
 #include "../utils/overloaded.hpp"
+#include "../utils/span_split.hpp"
 
 #include <algorithm>
 #include <type_traits>
 
 
 namespace NApi {
-    auto CreateNewGame::Result::ToBytes(
+    auto CreateNewGameResponse::ToBytes(
         std::span<std::byte, kSerializedSize> to
     ) const noexcept -> void {
         const auto [lSpan, rSpan] = Split<sizeof(VariantIndex)>(to);
@@ -26,8 +27,9 @@ namespace NApi {
         }, *this);
     }
 
-    auto CreateNewGame::Result::FromBytes(std::span<std::byte, kSerializedSize> from) noexcept
-      -> std::variant<Self, ParsingError> {
+    auto CreateNewGameResponse::FromBytes(std::span<const std::byte, kSerializedSize> from) noexcept
+      -> std::variant<CreateNewGameResponse, DeserializationError>
+    {
         const auto [lSpan, rSpan] = Split<sizeof(VariantIndex)>(from);
         const auto variantIndex = EnumFromBytes<VariantIndex>(lSpan);
         switch (variantIndex) {

@@ -15,12 +15,13 @@ auto NState::HandleState(
     const TcpClient& tcpClient,
     IUserClient& userClient
 ) noexcept -> PossibleNextState {
+    using namespace NUserAction;
     auto userAction = userClient.ActOn(ConnectedToCentralServer{});
     return std::visit(overloaded{
-        [&tcpClient](NUserAction::CreateNewGame) -> PossibleNextState {
+        [&tcpClient](CreateNewGame) -> PossibleNextState {
             return NeedToCreateNewGame{};
         },
-        [&tcpClient](NUserAction::JoinGame& game) -> PossibleNextState {
+        [&tcpClient](JoinGame& game) -> PossibleNextState {
             return NeedToJoinGame{.Id = std::move(game.Id)};
         },
     }, userAction);

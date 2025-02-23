@@ -2,7 +2,6 @@
 
 #include "../../utils/timer/timer.hpp"
 
-#include <cerrno>
 #include <chrono>
 #include <sys/poll.h>
 #include <unistd.h>
@@ -11,24 +10,34 @@
 auto RobustSyncRead(
     const int fd,
     const std::span<std::byte> to,
-    const std::chrono::milliseconds timeout
+    const std::chrono::milliseconds timeout,
+    const std::optional<int> cancellationFd
 ) noexcept
   -> RobustSyncReadResult {
     using namespace NRobustSyncRead;
-    auto pollFd = pollfd{
-        .fd = fd,
-        .events = POLLIN,
-        .revents = 0,
+    auto pollFd = std::array{
+        pollfd{
+            .fd = fd,
+            .events = POLLIN,
+            .revents = 0,
+        },
+        pollfd{
+            .fd = cancellationFd.value_or(-1),
+            .events = POLLIN,
+            .revents = 0
+        }
     };
+    const auto nfds = cancellationFd.has_value() ? 2 : 1;
     const auto timer = Timer{timeout};
     auto nBytesRead = size_t{0};
     auto remainingTime = timeout;
     for (; nBytesRead != to.size(); remainingTime = timer.CalcRemainingTime()) {
-        const auto pollResult = poll(&pollFd, 1, remainingTime.count());
+        const auto pollResult = poll(&pollFd[0], nfds, remainingTime.count());
         if (pollResult == -1) {
             if (errno == EINTR) continue;
             else return OnSystemError{
                 .NumBytesRead = nBytesRead,
+                .WallTimeElapsed = timer.CalcElapsedTime(),
                 .Err = SystemError{
                     .Value = std::errc{errno},
                     .ContextMessage = "poll() syscall failed (" SOURCE_LOCATION ")",
@@ -37,10 +46,10 @@ auto RobustSyncRead(
         } else if (pollResult == 0) {
             return OnTimeout{
                 .NumBytesRead = nBytesRead,
-                .Timeout = timeout,
+                .WallTimeElapsed = timer.CalcElapsedTime(),
             };
-        } else { // pollResult == 1
-            if (pollFd.revents & POLLIN) {  
+        } else { // pollResult == 1 or 2 
+            if (pollFd[0].revents & POLLIN) {  
                 const auto x = read(fd, &to[nBytesRead], to.size() - nBytesRead);
                 if (x == -1) {
                     // Check for `EAGAIN` and `EWOULDBLOCK` in case `poll` spuriously reported
@@ -48,6 +57,7 @@ auto RobustSyncRead(
                     if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
                     else return OnSystemError{
                         .NumBytesRead = nBytesRead,
+                        .WallTimeElapsed = timer.CalcElapsedTime(),
                         .Err = SystemError{
                             .Value = std::errc{errno},
                             .ContextMessage = "read() syscall failed (" SOURCE_LOCATION ")",
@@ -58,15 +68,16 @@ auto RobustSyncRead(
                     // `nBytesRead` is strictly less than `to.size()`
                     return OnPrematureEof{
                         .NumBytesRead = nBytesRead,
+                        .WallTimeElapsed = timer.CalcElapsedTime(),
                     };
                 } else {
                     nBytesRead += x;
                 }
-            } else { // `POLLERR | POLLHUP | POLLNVAL`
-                // See https://stackoverflow.com/questions/24791625/how-to-handle-the-linux-socket-revents-pollerr-pollhup-and-pollnval
-                if (pollFd.revents == POLLNVAL) {
+            } else if (pollFd[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                if (pollFd[0].revents == POLLNVAL) {
                     return OnSystemError{
                         .NumBytesRead = nBytesRead,
+                        .WallTimeElapsed = timer.CalcElapsedTime(),
                         .Err = SystemError{
                             .Value = std::errc{EBADF},
                             .ContextMessage = "poll() syscall failed (" SOURCE_LOCATION "), "
@@ -78,13 +89,32 @@ auto RobustSyncRead(
                 } else {
                     return OnPollerrOrPollhup{
                         .NumBytesRead = nBytesRead,
-                        .PollRevents = pollFd.revents,
+                        .WallTimeElapsed = timer.CalcElapsedTime(),
+                        .PollRevents = pollFd[0].revents,
                     };
                 }
+            } else if (pollFd[1].revents & POLLIN) { // cancellation
+                return OnCancellation{
+                    .NumBytesRead = nBytesRead,
+                    .WallTimeElapsed = timer.CalcElapsedTime(),
+                };
+            } else { // error on cancellation fd
+                return OnSystemError{
+                    .NumBytesRead = nBytesRead,
+                    .WallTimeElapsed = timer.CalcElapsedTime(),
+                    .Err = SystemError{
+                        .Value = std::errc{},
+                        .ContextMessage =
+                            "error on cancellation file descriptor (" SOURCE_LOCATION ")",
+                    },
+                };
             }
         }
     }
-    return OnSuccess{};
+    return OnSuccess{
+        .NumBytesRead = nBytesRead,
+        .WallTimeElapsed = timer.CalcElapsedTime(),
+    };
 }
 
 auto RobustSyncWrite(
@@ -99,9 +129,9 @@ auto RobustSyncWrite(
         .events = POLLOUT,
         .revents = 0,
     };
-    const auto timer = Timer{timeout};
     auto nBytesWritten = size_t{0};
     auto remainingTime = timeout;
+    const auto timer = Timer{timeout};
     for (; nBytesWritten != from.size(); remainingTime = timer.CalcRemainingTime()) {
         const auto pollResult = poll(&pollFd, 1, remainingTime.count());
         if (pollResult == -1) {

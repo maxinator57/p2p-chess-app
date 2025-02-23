@@ -41,12 +41,3 @@ requires std::is_enum_v<E>
 [[nodiscard]] auto EnumFromBytes(std::span<const std::byte, sizeof(E)> from) -> E {
     return FromBytes<std::underlying_type_t<E>>(from);
 }
-
-template <size_t LeftHalfSize, class T, size_t Size>
-[[nodiscard]] auto Split(std::span<T, Size> s) {
-    static_assert(LeftHalfSize < Size);
-    return std::pair{
-        s.template subspan<0, LeftHalfSize>(),
-        s.template subspan<LeftHalfSize, Size - LeftHalfSize>(),
-    };
-}

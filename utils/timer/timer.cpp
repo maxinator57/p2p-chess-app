@@ -1,15 +1,22 @@
 #include "timer.hpp"
 
 
-Timer::Timer(std::chrono::milliseconds timeout) noexcept
-    : StartTime(std::chrono::steady_clock::now())
+namespace {
+    using namespace std::chrono;
+}
+
+Timer::Timer(const milliseconds timeout) noexcept
+    : StartTime(Clock::now())
     , Timeout(timeout)
 {
 }
 
-auto Timer::CalcRemainingTime() const -> std::chrono::milliseconds {
-    const auto curTime = std::chrono::steady_clock::now();
-    const auto timeElapsed =
-    std::chrono::duration_cast<std::chrono::milliseconds>(curTime - StartTime);
-    return Timeout < timeElapsed ? std::chrono::milliseconds{0} : Timeout - timeElapsed;
+auto Timer::CalcElapsedTime() const -> milliseconds {
+    const auto curTime = Clock::now();
+    return duration_cast<milliseconds>(curTime - StartTime);
+}
+
+auto Timer::CalcRemainingTime() const -> milliseconds {
+    const auto timeElapsed = CalcElapsedTime();
+    return Timeout < timeElapsed ? milliseconds{0} : Timeout - timeElapsed;
 }

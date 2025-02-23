@@ -11,12 +11,11 @@ private:
 public:
     static auto FromTcpClient(TcpClient&& tcpClient) noexcept
       -> std::variant<TcpAcceptor, SystemError>;
-    auto Listen() const noexcept -> std::optional<SystemError>;
-    struct AcceptTimedOutError {};
-    struct AcceptPeerAddressMismatchError {};
+    struct Timeout {};
+    struct PeerAddressMismatchError {};
     auto AcceptExpectedPeer(
-      uint8_t timeoutInSeconds,
-      const sockaddr_storage& expectedPeerAddress
+        const sockaddr_storage& expectedPeerAddress,
+        const std::chrono::milliseconds timeout
     ) const noexcept
-      -> std::variant<TcpClient, SystemError, AcceptTimedOutError, AcceptPeerAddressMismatchError>;
+      -> std::variant<TcpClient, Timeout, SystemError, PeerAddressMismatchError>;
 };

@@ -4,38 +4,51 @@
 #include "../primitives/game_id/game_id.hpp"
 #include "tcp_client.hpp"
 
+#include <sys/socket.h>
 #include <variant>
 
 
 namespace NState {
     struct ErrorState {
         std::string ErrorDescription;
-        std::optional<std::string> RecommendationHowToFix = std::nullopt;
+        std::optional<std::string> RecommendationHowToFix;
     };
 
     struct NeedToConnectToCentralServer {};
     struct ConnectedToCentralServer {};
     struct FailedToConnectToCentralServer : public ErrorState {
-        FailedToConnectToCentralServer(ErrorState s) : ErrorState(std::move(s)) {}
+        explicit FailedToConnectToCentralServer(ErrorState s)
+            : ErrorState(std::move(s)) {}
     };
 
     struct NeedToCreateNewGame {};
     struct CreatedNewGame { GameId Id; };
     struct FailedToCreateNewGame : public ErrorState {
-        FailedToCreateNewGame(ErrorState s) : ErrorState(std::move(s)) {}
+        explicit FailedToCreateNewGame(ErrorState s)
+            : ErrorState(std::move(s)) {}
     };
 
     struct NeedToJoinGame { GameId Id; };
     struct JoinedGame { GameId Id; };
     struct FailedToJoinGame : public ErrorState {
-        FailedToJoinGame(ErrorState s) : ErrorState(std::move(s)) {}
+        explicit FailedToJoinGame(ErrorState s)
+            : ErrorState(std::move(s)) {}
     };
 
-    struct ConnectedToPeer {
+    struct NeedToAcceptConnectionFromExpectedPeer {
+        sockaddr_storage PeerAddress;
+        bool AlreadyTriedToConnectToPeer = false;
+    };
+    struct NeedToConnectToPeer {
+        sockaddr_storage PeerAddress;
+        bool AlreadyTriedToAcceptConnectionFromPeer = false;
+    };
+    struct EstablishedConnectionWithPeer {
         TcpClient Client;
     };
-    struct FailedToConnectToPeer : public ErrorState {
-        FailedToConnectToPeer(ErrorState s) : ErrorState(std::move(s)) {}
+    struct FailedToEstablishConnectionWithPeer : public ErrorState {
+        explicit FailedToEstablishConnectionWithPeer(ErrorState s)
+            : ErrorState(std::move(s)) {}
     };
 
     struct NeedToExit {};
@@ -50,8 +63,10 @@ namespace NState {
         NeedToJoinGame,
         JoinedGame,
         FailedToJoinGame,
-        ConnectedToPeer,
-        FailedToConnectToPeer,
+        NeedToAcceptConnectionFromExpectedPeer,
+        NeedToConnectToPeer,
+        EstablishedConnectionWithPeer,
+        FailedToEstablishConnectionWithPeer,
         NeedToExit
     >;
 } // namespace NState

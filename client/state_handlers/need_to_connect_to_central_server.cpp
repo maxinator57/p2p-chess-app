@@ -19,13 +19,13 @@ auto NState::HandleState(
     const auto connOrErr = tcpClient.Connect(centralServerEndpoint);
     return std::visit(overloaded{
         [](const auto& err) -> PossibleNextState {
-            return FailedToConnectToCentralServer{ErrorState{
+            return FailedToConnectToCentralServer{{
                 .ErrorDescription = ToStringGeneric(err),
                 // TODO: write recommendation how to fix
                 .RecommendationHowToFix = std::nullopt,
             }};
         },
-        [](const TcpClient::ConnectionEstablished) -> PossibleNextState {
+        [](TcpClient::Ok) -> PossibleNextState {
             return ConnectedToCentralServer{};
         },
     }, connOrErr);
