@@ -1,9 +1,11 @@
 #pragma once
 
+#include "../utils/span_utils.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+#include <ranges>
 #include <string_view>
 #include <sys/socket.h>
 #include <variant>
@@ -62,10 +64,27 @@ constexpr auto GetErrorMessage(IpAddrParsingError err) -> std::string_view {
     }
 }
 template <class OStream>
-auto operator<<(OStream& out, IpAddrParsingError err) -> OStream& {
+auto operator<<(OStream&& out, IpAddrParsingError err) -> OStream&& {
     out << GetErrorMessage(err);
-    return out;
+    return std::forward<OStream>(out);
 }
 
 auto ConstructIpAddrStorage(IpAddr)
   -> std::variant<in_addr, in6_addr, IpAddrParsingError>;
+
+
+template <class OStream>
+inline auto operator<<(OStream&& out, const in_addr& ipv4Addr) -> OStream&& {
+    auto buf = std::string(INET_ADDRSTRLEN, 0);
+    inet_ntop(AF_INET, &ipv4Addr, buf.data(), buf.size());
+    out << buf;
+    return std::forward<OStream>(out);
+}
+
+template <class OStream>
+inline auto operator<<(OStream&& out, const in6_addr& ipv6Addr) -> OStream&& {
+    auto buf = std::string(INET6_ADDRSTRLEN, 0);
+    inet_ntop(AF_INET6, &ipv6Addr, buf.data(), buf.size());
+    out << buf; 
+    return std::forward<OStream>(out);
+}

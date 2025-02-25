@@ -28,8 +28,15 @@ namespace NApi {
         auto ToBytes(std::span<std::byte, kSerializedSize>) const noexcept -> void;
         static auto FromBytes(std::span<const std::byte, kSerializedSize>) noexcept
           -> Self;
+        auto operator==(const Message& other) const -> bool = default;
     };
     using JoinGameRequest = Message<MessageType::JoinGameRequest>;
+
+    template <class OStream>
+    inline auto operator<<(OStream&& out, const JoinGameRequest& x) -> OStream&& {
+        out << "JoinGameRequest{" << x.GameIdToJoin << "}";
+        return std::forward<OStream>(out);
+    }
 
     template <>
     struct Message<MessageType::JoinGameResponse> {

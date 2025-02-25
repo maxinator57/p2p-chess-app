@@ -26,7 +26,7 @@ namespace NApi {
     };
 
     template <class OStream>
-    inline auto operator<<(OStream& out, CreateNewGame::Error err) -> OStream& {
+    inline auto operator<<(OStream&& out, CreateNewGame::Error err) -> OStream&& {
         switch (err) {
             case CreateNewGame::Error::NoAvailableSpaceInGameDB: {
                 out << "CreateNewGame error: no available space in server game database";
@@ -38,14 +38,21 @@ namespace NApi {
                     << ")";
             }
         }
-        return out;
+        return std::forward<OStream>(out);
     } 
 
     template <>
     struct Message<MessageType::CreateNewGameRequest> {
         static constexpr auto kSerializedSize = 0;
+        auto operator==(Message) const -> bool { return true; }
     };
     using CreateNewGameRequest = Message<MessageType::CreateNewGameRequest>;
+
+    template <class OStream>
+    inline auto operator<<(OStream&& out, CreateNewGameRequest) -> OStream&& {
+        out << "CreateNewGameRequest{}";
+        return std::forward<OStream>(out);
+    }
 
     template <>
     struct Message<MessageType::CreateNewGameResponse> : public CreateNewGame::Result {
@@ -71,28 +78,31 @@ namespace NApi {
 
     template <class OStream>
     inline auto operator<<(
-        OStream& out,
+        OStream&& out,
         CreateNewGameResponse::UnknownVariantIndex unknownIdx
-    ) -> OStream& {
+    ) -> OStream&& {
         out << "CreateNewGameResponse: unknown variant index (value: "
             << unknownIdx.Value << ")";
-        return out;
+        return std::forward<OStream>(out);
     }
 
     template <class OStream>
     inline auto operator<<(
-        OStream& out,
+        OStream&& out,
         CreateNewGameResponse::UnknownCreateNewGameError unknownErr
-    ) -> OStream& {
+    ) -> OStream&& {
         out << "CreateNewGameResponse: unknown CreateNewGame error (value: "
             << unknownErr.Value << ")";
-        return out;
+        return std::forward<OStream>(out);
     }
 
     template <class OStream>
-    inline auto operator<<(OStream& out, CreateNewGameResponse::DeserializationError err) -> OStream& {
+    inline auto operator<<(
+        OStream&& out,
+        CreateNewGameResponse::DeserializationError err
+    ) -> OStream&& {
         out << "CreateNewGameResponse::DeserializationError: ";
         std::visit([&out](auto err) { out << err.Value; }, err);
-        return out;
+        return std::forward<OStream>(out);
     }
 } // namespace NApi

@@ -20,7 +20,7 @@ struct ErrorWithContext {
 
 using SystemError = ErrorWithContext<std::errc>;
 template <class OStream>
-inline auto operator<<(OStream& out, const SystemError& err) -> OStream& {
+inline auto operator<<(OStream&& out, const SystemError& err) -> OStream&& {
     if (err.ContextMessage) {
         out << (*err.ContextMessage) << ", got the following error: ";
     }
@@ -28,17 +28,18 @@ inline auto operator<<(OStream& out, const SystemError& err) -> OStream& {
     out << strerrorname_np(errorCode.value())
         << "(" << errorCode.value() << "), description: "
         << errorCode.message();
-    return out;
+    return std::forward<OStream>(out);
 }
 
 
 using GenericError = ErrorWithContext<std::string>;
 template <class OStream>
-inline auto operator<<(OStream& out, const GenericError& err) -> OStream& {
+inline auto operator<<(OStream&& out, const GenericError& err) -> OStream&& {
     if (err.ContextMessage) {
         out << err.ContextMessage << ", got the following error: ";
     }
-    return out << err.Value;
+    out << err.Value;
+    return std::forward<OStream>(out);
 }
 
 template <class Error>

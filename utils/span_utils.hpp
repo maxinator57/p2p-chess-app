@@ -1,3 +1,6 @@
+#pragma once
+
+
 #include <algorithm>
 #include <span>
 #include <tuple>
@@ -34,6 +37,14 @@ struct StdSpanTraits<const std::span<T, Size_>> {
     using ElementType = T;
 };
 
+
+template <class T> concept IsConvertibleToStdSpan =
+    StdSpanTraits<decltype(std::span{std::declval<T&>()})>::IsStdSpan;
+
+template <class T> concept IsConvertibleToStdSpanWithKnownSize =
+    StdSpanTraits<decltype(std::span{std::declval<T&>()})>::HasKnownSize;
+
+
 namespace NSpanSplitImpl {
 template <size_t NumArgsToSum, size_t Arg, size_t... Args>
 struct Sum {
@@ -46,7 +57,7 @@ struct Sum<NumArgsToSum, Arg> {
 };
 
 template <size_t... PartSizes, size_t... Indices>
-[[nodiscard]] auto SplitImpl(std::index_sequence<Indices...>, auto s)
+[[nodiscard]] constexpr auto SplitImpl(std::index_sequence<Indices...>, auto s)
 {
     using Traits = StdSpanTraits<decltype(s)>;
     static_assert(Traits::HasKnownSize);
@@ -60,31 +71,29 @@ template <size_t... PartSizes, size_t... Indices>
 } // namespace NSpanSplitImpl
 
 
-template <class T> concept IsConvertibleToStdSpan =
-    StdSpanTraits<decltype(std::span{std::declval<T&>()})>::IsStdSpan;
-
-template <class T> concept IsConvertibleToStdSpanWithKnownSize =
-    StdSpanTraits<decltype(std::span{std::declval<T&>()})>::HasKnownSize;
-
-
-
 template <size_t... PartSizes>
 [[nodiscard]] constexpr auto Split(const auto& s)
 requires IsConvertibleToStdSpanWithKnownSize<decltype(s)>
 {
-    using namespace NSpanSplitImpl;
-    return SplitImpl<PartSizes...>(
+    return NSpanSplitImpl::SplitImpl<PartSizes...>(
         std::make_index_sequence<sizeof...(PartSizes)>(),
         std::span{s}
     );
 }
 
+
 template <size_t Size>
-struct SpanDeepCopyArgs {
+struct SpanCopyArgs {
     std::span<const std::byte, Size> Src;
     std::span<std::byte, Size> Dst;
 };
 template <size_t Size>
-constexpr auto SpanDeepCopy(SpanDeepCopyArgs<Size> args) -> void {
+constexpr auto SpanCopy(SpanCopyArgs<Size> args) -> void {
     std::copy_n(args.Src.begin(), Size, args.Dst.begin());
+}
+
+
+template <class T>
+auto MemoryRepresentation(const T& x) -> std::span<const std::byte, sizeof(T)> {
+    return std::as_bytes(std::span<const T, 1>(&x, 1));
 }

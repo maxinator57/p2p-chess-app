@@ -31,3 +31,7 @@ auto ConstructSockAddr(
     const in6_addr& ipv6Addr,
     in_port_t portInLocalByteOrder
 ) -> sockaddr_in6;
+
+
+auto operator==(const sockaddr_in& lhs, const sockaddr_in& rhs) -> bool;
+auto operator==(const sockaddr_in6& lhs, const sockaddr_in6& rhs) -> bool;

@@ -30,7 +30,7 @@ public:
 };
 
 template <class OStream>
-auto operator<<(OStream& out, const GameId& gameId) -> OStream& {
-    out << gameId.GetValue();
-    return out;
+auto operator<<(OStream&& out, const GameId& gameId) -> OStream&& {
+    out << "GameId{" << gameId.GetValue() << "}";
+    return std::forward<OStream>(out);
 }

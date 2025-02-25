@@ -23,6 +23,7 @@ template <std::integral I>
 [[nodiscard]] auto IntFromBytes(std::span<const std::byte, sizeof(I)> from) -> I {
     I x;
     std::memcpy(&x, from.data(), sizeof(x));
+    return x;
 }
 
 template <class E>
@@ -34,10 +35,10 @@ auto ToUnderlying(E x) -> std::underlying_type_t<E> {
 template <class E>
 requires std::is_enum_v<E>
 auto EnumToBytes(E x, std::span<std::byte, sizeof(E)> to) -> void {
-    ToBytes(ToUnderlying(x), to);
+    IntToBytes(ToUnderlying(x), to);
 }
 template <class E>
 requires std::is_enum_v<E>
 [[nodiscard]] auto EnumFromBytes(std::span<const std::byte, sizeof(E)> from) -> E {
-    return FromBytes<std::underlying_type_t<E>>(from);
+    return static_cast<E>(IntFromBytes<std::underlying_type_t<E>>(from));
 }

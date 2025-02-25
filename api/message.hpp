@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../utils/integer_serialization.hpp"
+#include "../utils/span_utils.hpp"
 
 #include <cstdint>
 #include <span>
@@ -53,18 +54,18 @@ namespace NApi {
         }
     }
     template <class OStream>
-    inline auto operator<<(OStream& out, MessageType mt) noexcept -> OStream& {
+    inline auto operator<<(OStream&& out, MessageType mt) noexcept -> OStream&& {
         out << ToString(mt);
-        return out;
+        return std::forward<OStream>(out);
     }
 
     struct UnknownMessageTypeError {
         std::underlying_type_t<MessageType> UnknownMessageType;
     };
     template <class OStream>
-    inline auto operator<<(OStream& out, UnknownMessageTypeError err) noexcept -> OStream& {
+    inline auto operator<<(OStream&& out, UnknownMessageTypeError err) noexcept -> OStream&& {
         out << "unknown message type: " << err.UnknownMessageType;
-        return out;
+        return std::forward<OStream>(out);
     }
 
     struct WrongMessageTypeError {
@@ -72,9 +73,9 @@ namespace NApi {
         MessageType GotMessageType;
     };
     template <class OStream>
-    inline auto operator<<(OStream& out, WrongMessageTypeError err) noexcept -> OStream& {
+    inline auto operator<<(OStream&& out, WrongMessageTypeError err) noexcept -> OStream&& {
         out << "wrong message type: expected " << err.ExpectedMessageType << ", got " << err.GotMessageType;
-        return out;
+        return std::forward<OStream>(out);
     }
 
     template <MessageType MT> struct Message;
@@ -88,22 +89,32 @@ namespace NApi {
     template <MessageType MT>
     using ConstView = std::span<const std::byte, sizeof(MT) + Message<MT>::kSerializedSize>;
 
-    template <MessageType MT> concept IsValidMessage = requires(Message<MT> msg) {
-        { Message<MT>::kSerializedSize } -> std::same_as<size_t>;
-        {
-            msg.ToBytes(
-                std::declval<std::span<std::byte, Message<MT>::kSerializedSize>>()
-            ) 
-        } -> std::same_as<void>;
-        { Message<MT>::FromBytes() };
-    }; 
+    template <MessageType MT> concept IsValidMessage =
+        (Message<MT>::kSerializedSize == 0) || requires(Message<MT> msg) {
+            { []() { return Message<MT>::kSerializedSize; }() } -> std::same_as<size_t>;
+            {
+                msg.ToBytes(
+                    std::declval<std::span<std::byte, Message<MT>::kSerializedSize>>()
+                ) 
+            } -> std::same_as<void>;
+            {
+                Message<MT>::FromBytes(
+                    std::declval<std::span<const std::byte, Message<MT>::kSerializedSize>>()
+                )
+            };
+            { msg == std::declval<Message<MT>>() } -> std::same_as<bool>;
+        }; 
 
     template <MessageType MT>
     inline auto Serialize(const Message<MT>& msg, View<MT> to) noexcept -> void {
         static_assert(IsValidMessage<MT>);
-        auto [lSpan, rSpan] = Split<sizeof(MT)>(to);
-        EnumToBytes(MT, lSpan);
-        msg.ToBytes(rSpan);
+        if constexpr (Message<MT>::kSerializedSize == 0) {
+            EnumToBytes(MT, to);
+        } else {
+            auto [lSpan, rSpan] = Split<sizeof(MT)>(to);
+            EnumToBytes(MT, lSpan);
+            msg.ToBytes(rSpan);
+        }
     }
 
     template <MessageType MT>
@@ -130,6 +141,28 @@ namespace NApi {
     };
 
     // Deserialization function for messages that
+    // have deserialization zero serialized size
+    template <MessageType MT>
+    inline auto Deserialize(ConstView<MT> from) noexcept
+      -> std::variant<Message<MT>, UnknownMessageTypeError, WrongMessageTypeError>
+    requires (Message<MT>::kSerializedSize == 0)
+    {
+        const auto actualMessageType = EnumFromBytes<MessageType>(from);
+        if (actualMessageType == MT) {
+            return Message<MT>();
+        } else if (IsKnownMessageType(actualMessageType)) {
+            return WrongMessageTypeError{
+                .ExpectedMessageType = MT,
+                .GotMessageType = actualMessageType,
+            };
+        } else {
+            return UnknownMessageTypeError{
+                .UnknownMessageType = ToUnderlying(actualMessageType),
+            };
+        }
+    }
+
+    // Deserialization function for messages that
     // don't have deserialization errors
     template <MessageType MT>
     inline auto Deserialize(ConstView<MT> from) noexcept
@@ -148,7 +181,7 @@ namespace NApi {
             };
         } else {
             return UnknownMessageTypeError{
-                .UnknownMessageType = actualMessageType,
+                .UnknownMessageType = ToUnderlying(actualMessageType),
             };
         }
     }
@@ -182,7 +215,7 @@ namespace NApi {
             };
         } else {
             return UnknownMessageTypeError{
-                .UnknownMessageType = actualMessageType,
+                .UnknownMessageType = ToUnderlying(actualMessageType),
             };
         }
     }

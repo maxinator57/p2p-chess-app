@@ -6,7 +6,7 @@
 
 template <class T>
 concept IsWritableToStringstream = requires (T x) {
-    { std::stringstream{} << x } -> std::same_as<std::stringstream&>;
+    { std::stringstream{} << x } -> std::same_as<std::stringstream&&>;
 };
 
 template <class T>
